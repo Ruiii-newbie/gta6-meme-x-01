@@ -13,7 +13,30 @@ import { join } from 'node:path';
 const BOT_DIR = process.env.MAKEFUN_BOT_DIR ?? '/bot';
 const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-const POST_URL = /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\/[^/]+\/status\/\d+$/;
+const ALLOWED_HOSTS = new Set([
+  'x.com',
+  'www.x.com',
+  'twitter.com',
+  'www.twitter.com',
+  'mobile.twitter.com',
+]);
+
+// /<handle>/status/<digits>, or the /i/web/status/<digits> share form.
+const STATUS_PATH = /^\/[^/]+\/status\/\d+$/;
+const WEB_STATUS_PATH = /^\/i\/web\/status\/\d+$/;
+
+function isPostUrl(value: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+  if (!ALLOWED_HOSTS.has(parsed.hostname.toLowerCase())) return false;
+  if (parsed.search !== '' || parsed.hash !== '') return false;
+  return STATUS_PATH.test(parsed.pathname) || WEB_STATUS_PATH.test(parsed.pathname);
+}
 
 function fail(message: string): never {
   console.error(`gta6-meme-x-01: ${message}`);
@@ -40,8 +63,8 @@ if (typeof post !== 'object' || post === null || Array.isArray(post)) {
   fail('POST.json must be a JSON object with a url string');
 }
 const url = (post as { url?: unknown }).url;
-if (typeof url !== 'string' || !POST_URL.test(url)) {
-  fail('POST.json url must be an X post address like https://x.com/<handle>/status/<id>');
+if (typeof url !== 'string' || !isPostUrl(url)) {
+  fail('POST.json url must be an X post address: host x.com / www.x.com / twitter.com / www.twitter.com / mobile.twitter.com, path /<handle>/status/<id> (or /i/web/status/<id>)');
 }
 
 writeFileSync(join(OUTPUT_DIR, 'POST.json'), JSON.stringify({ url }) + '\n', 'utf8');
